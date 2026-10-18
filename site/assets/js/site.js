@@ -34,13 +34,13 @@
   // Magnifier hero. Desktop: a round lens follows the mouse (or a dragging finger) and, until someone
   // touches it, drifts slowly over the headline so the effect is discoverable; the button opens it all.
   // Phones and tablets (≤ 960px, same breakpoint as site.css): the hero sticks to the top of a taller track
-  // and scrolling grows the lens from the second headline line until it covers the hero, while the figures
-  // count up. Nothing to tap; the pill ("Derulează") scrolls there for anyone who prefers a button.
+  // and scrolling raises a white sheet (the proof layer) from the bottom; each headline line turns into the
+  // documented word as the sheet's edge passes it, and the figures count up. Nothing to tap; the pill
+  // ("Derulează") scrolls there for anyone who prefers a button.
   function initLens(hero) {
     var proof = hero.querySelector('.proof');
     var revealBtn = hero.querySelector('.reveal');
     var track = hero.closest('.hero-scroll');
-    var line2 = hero.querySelectorAll('.said .lines span')[1];
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var phone = window.matchMedia('(max-width: 960px)');
     var openLabel = revealBtn.textContent, closeLabel = revealBtn.getAttribute('data-close-label');
@@ -48,7 +48,7 @@
     var figures = Array.prototype.map.call(hero.querySelectorAll('.fact b'), function (el) {
       return { el: el, text: el.textContent, to: parseInt(el.textContent.replace(/\D/g, ''), 10) };
     });
-    var followed = false, t = 0, closingTimer, cy = 0, stickTop = 0, revealSent = false;
+    var followed = false, t = 0, closingTimer, stickTop = 0, revealSent = false;
 
     function isOpen() { return hero.classList.contains('open'); }
     function setLens(x, y) { hero.style.setProperty('--x', x + 'px'); hero.style.setProperty('--y', y + 'px'); }
@@ -61,12 +61,9 @@
     function clamp(v) { return Math.max(0, Math.min(1, v)); }
     function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' lei'; }
 
-    // Phone mode. The lens centre follows the second headline line; a hero taller than the screen sticks
-    // with its foot on the bottom edge (negative top), so the buttons stay in view.
+    // Phone mode. A hero taller than the screen sticks with its foot on the bottom edge (negative top),
+    // so the buttons stay in view.
     function measure() {
-      var r = hero.getBoundingClientRect(), s = line2.getBoundingClientRect();
-      cy = s.top - r.top + s.height / 2;
-      hero.style.setProperty('--cy', cy + 'px');
       stickTop = Math.min(0, window.innerHeight - hero.offsetHeight);
       hero.style.top = stickTop + 'px';
     }
@@ -76,14 +73,12 @@
     }
     function onScroll() {
       if (!phone.matches) return;
-      var p = scrollProgress(), e = p * p * (3 - 2 * p), r = hero.getBoundingClientRect();
-      var maxR = Math.hypot(r.width / 2 + 10, Math.max(cy, r.height - cy) + 10);
-      hero.style.setProperty('--r', (44 + (maxR - 44) * e) + 'px');
-      hero.style.setProperty('--ring-o', String(1 - clamp((p - .6) / .25)));
-      hero.classList.toggle('idle', p < .01);
-      hero.classList.toggle('scrolled', p > .17);
-      hero.classList.toggle('revealed', p > .7);
-      var k = clamp((p - .45) / .4);
+      var p = scrollProgress(), e = p * (2 - p);
+      var start = hero.offsetHeight - (parseFloat(getComputedStyle(hero).getPropertyValue('--peek')) || 0);
+      hero.style.setProperty('--sheet', (start * (1 - e)) + 'px');
+      hero.style.setProperty('--handle-o', String(1 - clamp(p / .25)));
+      hero.classList.toggle('scrolled', p > .12);
+      var k = clamp((p - .1) / .45);
       figures.forEach(function (f) { f.el.textContent = k >= 1 ? f.text : money(Math.round(f.to * k)); });
       if (p > .05) markUsed();
       if (p >= 1 && !revealSent) { revealSent = true; hero.dispatchEvent(new CustomEvent('lens:reveal', { bubbles: true })); }
@@ -100,8 +95,8 @@
         revealBtn.removeAttribute('aria-pressed');
         measure(); onScroll();
       } else {
-        ['--r', '--cy', '--ring-o', 'top'].forEach(function (p) { hero.style.removeProperty(p); });
-        hero.classList.remove('idle', 'scrolled', 'revealed');
+        ['--sheet', '--handle-o', 'top'].forEach(function (p) { hero.style.removeProperty(p); });
+        hero.classList.remove('scrolled');
         figures.forEach(function (f) { f.el.textContent = f.text; });
         revealBtn.textContent = isOpen() ? closeLabel : openLabel;
         revealBtn.setAttribute('aria-pressed', String(isOpen()));

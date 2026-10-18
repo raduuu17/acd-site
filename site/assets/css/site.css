@@ -131,8 +131,12 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 @media (max-width: 960px) {
   .menu-toggle { display: inline-flex; }
   html.js .nav { display: none; }
+  /* The top bar stays on screen while scrolling (it is out of flow on every page already). */
+  html.js .top { position: fixed; box-shadow: 0 10px 24px -18px rgba(10, 20, 45, .6); }
+  html.js .top .wrap { height: 80px; }
+  html { scroll-padding-top: 96px; }
   /* The menu opens as a small card under the button (4 links), not a full-screen panel. */
-  html.js .nav.open { display: flex; position: absolute; top: 82px; right: 32px; z-index: 60; flex-direction: column; align-items: stretch; gap: 2px; width: min(280px, calc(100vw - 36px)); padding: 8px; background: var(--foot-bg); border: 1px solid var(--burger-line); border-radius: 14px; box-shadow: 0 24px 60px -18px rgba(10, 20, 45, .6); transform-origin: top right; animation: menu-in .18s ease-out; }
+  html.js .nav.open { display: flex; position: absolute; top: 72px; right: 32px; z-index: 60; flex-direction: column; align-items: stretch; gap: 2px; width: min(280px, calc(100vw - 36px)); padding: 8px; background: var(--foot-bg); border: 1px solid var(--burger-line); border-radius: 14px; box-shadow: 0 24px 60px -18px rgba(10, 20, 45, .6); transform-origin: top right; animation: menu-in .18s ease-out; }
   html.js .nav.open a { padding: 12px 14px; border-radius: 10px; font-size: 17px; }
   html.js .nav.open a:not(.cta):hover, html.js .nav.open a[aria-current="page"] { background: var(--h-bg); color: var(--nav-hover); text-decoration: none; }
   html.js .nav.open a.cta { margin-top: 6px; text-align: center; }
@@ -195,7 +199,8 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 .hero.open .reveal { background: var(--h-btn2-bg); color: var(--h-btn2-text); }
 /* Without JavaScript the documents are simply shown. */
 html:not(.js) .proof { clip-path: none; }
-html:not(.js) .lens-ring, html:not(.js) .reveal { display: none; }
+html:not(.js) .lens-ring, html:not(.js) .reveal, html:not(.js) .sheet-edge { display: none; }
+.sheet-edge { display: none; }
 html:not(.js) .hero { cursor: auto; }
 
 /* ---------- Home sections ---------- */
@@ -242,16 +247,17 @@ html:not(.js) .hero { cursor: auto; }
   .files, .people { padding: 70px 0; }
   .intro { padding: 60px 0 50px; }
 }
-/* ===== Mobile lens (phones and tablets, ≤ 960px; variant C chosen on 2026-10-18): scrolling grows the lens.
-   The hero sticks to the top of a taller track; the script turns scroll progress into the lens radius --r,
-   centred on the second headline line (--cy), and counts the figures up. Desktop rules above are untouched. ===== */
+/* ===== Mobile lens (phones and tablets, ≤ 960px; chosen on 2026-10-18): a white sheet rises as you scroll.
+   The hero sticks to the top of a taller track; the script turns scroll progress into the sheet's top edge
+   (--sheet). The sheet is the proof layer, so each headline line turns into the documented word as the edge
+   passes it, and the figures count up. Desktop rules above are untouched. ===== */
 @media (max-width: 960px) {
   html.js .hero-scroll { height: calc(100svh + 900px); background: var(--h-bg); }
   html.js .hero { position: sticky; top: 0; }
 
   /* The hero is a two-row grid. The proof layer is in flow and spans both rows; the foot sits in row 2,
      so the facts can never run under the buttons. */
-  .hero { display: grid; grid-template-rows: 1fr auto; height: auto; min-height: 100svh; }
+  .hero { --peek: 128px; display: grid; grid-template-rows: 1fr auto; height: auto; min-height: 100svh; }
   .layer { padding-top: 112px; }
   .proof { position: relative; inset: auto; display: block; grid-area: 1 / 1 / 3 / 2; padding-bottom: 96px; }
   .hero-foot { position: relative; inset: auto; grid-area: 2 / 1 / 3 / 2; padding-bottom: 20px; }
@@ -271,29 +277,28 @@ html:not(.js) .hero { cursor: auto; }
   .said .fog::before { order: 5; width: 72%; }
   .said .fog::after { order: 6; width: 40%; }
 
-  /* The lens: a circle on the second line that grows with scrolling; it breathes while nobody has scrolled. */
-  .proof { clip-path: circle(var(--r, 44px) at 50% var(--cy, 40%)); }
-  .lens-ring { left: 50%; top: var(--cy, 40%); width: calc(var(--r, 44px) * 2); height: calc(var(--r, 44px) * 2); border-width: 3px; box-shadow: 0 0 0 5px rgba(124, 192, 255, .22); opacity: var(--ring-o, 1); transition: none; }
-  .lens-ring::after { display: none; }
-  .hero.idle .lens-ring { animation: lens-breathe 1.8s ease-in-out infinite; }
+  /* The sheet: the proof layer, shown from --sheet down with rounded top corners; at rest only its top
+     (--peek) shows, with a handle, like a bottom sheet in a phone app. */
+  .proof { clip-path: inset(var(--sheet, calc(100% - var(--peek))) 0px 0px 0px round 22px 22px 0px 0px); }
+  .lens-ring { display: none; }
+  .sheet-edge { display: block; position: absolute; z-index: 4; left: 0; right: 0; top: var(--sheet, calc(100% - var(--peek))); height: 40px; border-radius: 22px 22px 0 0; box-shadow: 0 -16px 32px -14px rgba(10, 20, 45, .55); pointer-events: none; }
+  .sheet-edge::before { content: ""; position: absolute; top: 10px; left: 50%; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--h-proof-line); opacity: var(--handle-o, 1); }
 
-  /* Foot: a small "scroll" pill + one text link ("Despre noi" stays in the menu and footer). */
+  /* Foot, on the sheet: a small "scroll" pill + one text link ("Despre noi" stays in the menu and footer). */
   .hero-foot .wrap { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 22px; }
-  .reveal { width: auto; min-height: 44px; padding: 10px 20px; border-radius: 999px; font-size: 15px; transition: opacity .25s, visibility .25s; }
+  .reveal { width: auto; min-height: 44px; padding: 10px 20px; border-radius: 999px; font-size: 15px; background: var(--h-btn2-bg); color: var(--h-btn2-text); transition: opacity .25s, visibility .25s; }
   .reveal::after { content: "↓"; display: inline-block; margin-left: 7px; animation: hint-nudge 1.4s ease-in-out infinite; }
   .hero.scrolled .reveal { opacity: 0; visibility: hidden; }
   .hero-foot .btns { flex-direction: row; justify-content: center; gap: 0 24px; }
-  .hero-foot .btn { background: none; border: 0; padding: 10px 4px; min-height: 44px; color: var(--nav-hover); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+  .hero-foot .btn { background: none; border: 0; padding: 10px 4px; min-height: 44px; color: var(--accent); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
   .hero-foot .btn.primary:hover { filter: none; text-decoration-thickness: 3px; }
   .hero-foot .btn.secondary { display: none; }
-  .hero.revealed .hero-foot .btn { color: var(--accent); }
-  .hero.revealed .hero-foot { --focus-ring: var(--accent); }
+  .hero-scroll .hero .hero-foot { --focus-ring: var(--accent); }
 }
 @media (max-width: 960px) and (prefers-reduced-motion: reduce) {
-  .hero.idle .lens-ring, .reveal::after { animation: none; }
+  .reveal::after { animation: none; }
   html.js .nav.open { animation: none; }
 }
-@keyframes lens-breathe { 50% { transform: translate(-50%, -50%) scale(1.09); } }
 @keyframes hint-nudge { 50% { transform: translateY(3px); } }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) {

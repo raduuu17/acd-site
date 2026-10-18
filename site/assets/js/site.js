@@ -39,16 +39,22 @@
     });
   }
 
-  // Magnifier hero: the lens follows the mouse, or a finger dragging on touch screens
-  // (vertical page scroll stays with the browser via touch-action: pan-y). Until someone
-  // touches it, it drifts slowly over the headline so the effect is discoverable.
+  // Magnifier hero. Desktop: a round lens follows the mouse (or a dragging finger) and, until someone
+  // touches it, drifts slowly over the headline so the effect is discoverable.
+  // Phones and tablets (≤ 960px, same breakpoint as site.css): the lens is a band one headline line tall.
+  // It moves from line to line by itself, one pair "declared → documented" at a time; a tap on a line
+  // parks it there. Vertical finger drags stay a page scroll (touch-action: pan-y), the band never fights them.
   function initLens(hero) {
     var proof = hero.querySelector('.proof');
     var revealBtn = hero.querySelector('.reveal');
+    var saidLines = hero.querySelectorAll('.said .lines span');
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var phone = window.matchMedia('(max-width: 960px)');
     var openLabel = revealBtn.textContent, closeLabel = revealBtn.getAttribute('data-close-label');
-    var followed = false, used = false, t = 0, closingTimer;
+    var followed = false, used = false, t = 0, closingTimer, line = 0, lastStep = 0;
+    var STEP_MS = 2400;
 
+    function isOpen() { return hero.classList.contains('open'); }
     function setLens(x, y) { hero.style.setProperty('--x', x + 'px'); hero.style.setProperty('--y', y + 'px'); }
     function fromEvent(e) { var r = hero.getBoundingClientRect(); setLens(e.clientX - r.left, e.clientY - r.top); }
     function onControl(e) { return e.target.closest('a, button'); }
@@ -57,21 +63,50 @@
       if (!used) { used = true; hero.dispatchEvent(new CustomEvent('lens:use', { bubbles: true })); }
     }
 
+    // Band mode: centre the band on headline line i and make it that line tall (+ 6px above and below).
+    function bandTo(i) {
+      line = (i + saidLines.length) % saidLines.length;
+      var r = hero.getBoundingClientRect(), s = saidLines[line].getBoundingClientRect();
+      hero.style.setProperty('--lens', Math.round(s.height / 2 + 6) + 'px');
+      setLens(r.width / 2, s.top - r.top + s.height / 2);
+    }
+    function lineAt(clientY) {
+      var best = 0, dist = Infinity;
+      for (var i = 0; i < saidLines.length; i++) {
+        var s = saidLines[i].getBoundingClientRect(), d = Math.abs(clientY - (s.top + s.height / 2));
+        if (d < dist) { dist = d; best = i; }
+      }
+      return best;
+    }
+    // Entering band mode measures the lines; leaving it hands --lens back to the stylesheet token.
+    function applyMode() {
+      if (phone.matches) bandTo(line);
+      else hero.style.removeProperty('--lens');
+    }
+
     hero.addEventListener('pointermove', function (e) {
-      if (hero.classList.contains('open') || onControl(e)) return;
+      if (phone.matches || isOpen() || onControl(e)) return;
       if (e.pointerType === 'mouse' || e.buttons) { markUsed(); fromEvent(e); }
     });
     hero.addEventListener('pointerdown', function (e) {
-      if (hero.classList.contains('open') || onControl(e)) return;
+      if (phone.matches || isOpen() || onControl(e)) return;
       markUsed(); fromEvent(e);
     });
+    // Band mode: a tap (click, so a scroll that started on the hero does not count) parks the band on that line.
+    hero.addEventListener('click', function (e) {
+      if (!phone.matches || isOpen() || onControl(e)) return;
+      markUsed(); bandTo(lineAt(e.clientY));
+    });
+    window.addEventListener('resize', applyMode);
+    if (phone.addEventListener) phone.addEventListener('change', applyMode); else phone.addListener(applyMode);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(applyMode);
 
     // 'closing' exists only while the lens shrinks back; left in place it would animate
     // every later lens move and the lens would lag behind the pointer.
     function endClosing() { hero.classList.remove('closing'); clearTimeout(closingTimer); }
     proof.addEventListener('transitionend', function (e) { if (e.propertyName === 'clip-path') endClosing(); });
     revealBtn.addEventListener('click', function () {
-      var open = !hero.classList.contains('open');
+      var open = !isOpen();
       hero.classList.toggle('open', open);
       if (open) endClosing();
       else { hero.classList.add('closing'); clearTimeout(closingTimer); closingTimer = setTimeout(endClosing, 700); }
@@ -80,17 +115,22 @@
       if (open) hero.dispatchEvent(new CustomEvent('lens:reveal', { bubbles: true }));
     });
 
-    function drift() {
-      if (!followed && !hero.classList.contains('open')) {
-        var r = hero.getBoundingClientRect();
-        t += 0.0025;
-        setLens(r.width * (0.3 + 0.16 * Math.cos(t * 2)), r.height * (0.47 + 0.1 * Math.sin(t * 3)));
+    function drift(now) {
+      if (!followed && !isOpen()) {
+        if (phone.matches) {
+          if (now - lastStep > STEP_MS) { lastStep = now; bandTo(line + 1); }
+        } else {
+          var r = hero.getBoundingClientRect();
+          t += 0.0025;
+          setLens(r.width * (0.3 + 0.16 * Math.cos(t * 2)), r.height * (0.47 + 0.1 * Math.sin(t * 3)));
+        }
       }
       window.requestAnimationFrame(drift);
     }
+    applyMode();
     // Without motion the documents are simply shown, open, with the button to go back to the lens.
     if (reduce) { hero.classList.add('open'); revealBtn.textContent = closeLabel; revealBtn.setAttribute('aria-pressed', 'true'); }
-    else drift();
+    else { lastStep = performance.now(); drift(lastStep); }
   }
 
   // Documentări filters: show the items of one type; without JS every item stays visible.

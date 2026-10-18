@@ -32,21 +32,23 @@
   }
 
   // Magnifier hero. Desktop: a round lens follows the mouse (or a dragging finger) and, until someone
-  // touches it, drifts slowly over the headline so the effect is discoverable.
-  // Phones and tablets (≤ 960px, same breakpoint as site.css): the lens is a band one headline line tall.
-  // It moves from line to line by itself, one pair "declared → documented" at a time. A tap anywhere on
-  // the hero shows all the documents, another tap goes back to the lens (the small button does the same
-  // for keyboards and screen readers). Vertical finger drags stay a page scroll (touch-action: pan-y).
+  // touches it, drifts slowly over the headline so the effect is discoverable; the button opens it all.
+  // Phones and tablets (≤ 960px, same breakpoint as site.css): the hero sticks to the top of a taller track
+  // and scrolling grows the lens from the second headline line until it covers the hero, while the figures
+  // count up. Nothing to tap; the pill ("Derulează") scrolls there for anyone who prefers a button.
   function initLens(hero) {
     var proof = hero.querySelector('.proof');
-    var ring = hero.querySelector('.lens-ring');
     var revealBtn = hero.querySelector('.reveal');
-    var saidLines = hero.querySelectorAll('.said .lines span');
+    var track = hero.closest('.hero-scroll');
+    var line2 = hero.querySelectorAll('.said .lines span')[1];
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var phone = window.matchMedia('(max-width: 960px)');
     var openLabel = revealBtn.textContent, closeLabel = revealBtn.getAttribute('data-close-label');
-    var followed = false, t = 0, closingTimer, line = 0;
-    var STEP_MS = 2000;
+    var scrollLabel = revealBtn.getAttribute('data-scroll-label');
+    var figures = Array.prototype.map.call(hero.querySelectorAll('.fact b'), function (el) {
+      return { el: el, text: el.textContent, to: parseInt(el.textContent.replace(/\D/g, ''), 10) };
+    });
+    var followed = false, t = 0, closingTimer, cy = 0, stickTop = 0, revealSent = false;
 
     function isOpen() { return hero.classList.contains('open'); }
     function setLens(x, y) { hero.style.setProperty('--x', x + 'px'); hero.style.setProperty('--y', y + 'px'); }
@@ -56,21 +58,54 @@
       if (!followed) hero.dispatchEvent(new CustomEvent('lens:use', { bubbles: true }));
       followed = true;
     }
+    function clamp(v) { return Math.max(0, Math.min(1, v)); }
+    function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' lei'; }
 
-    // Band mode: centre the band on headline line i and make it that line tall (+ 6px above and below).
-    // A light sweeps across the band each time it lands on a new line.
-    function bandTo(i) {
-      var next = (i + saidLines.length) % saidLines.length;
-      if (next !== line) { ring.classList.remove('sweep'); void ring.offsetWidth; ring.classList.add('sweep'); }
-      line = next;
-      var r = hero.getBoundingClientRect(), s = saidLines[line].getBoundingClientRect();
-      hero.style.setProperty('--lens', Math.round(s.height / 2 + 6) + 'px');
-      setLens(r.width / 2, s.top - r.top + s.height / 2);
+    // Phone mode. The lens centre follows the second headline line; a hero taller than the screen sticks
+    // with its foot on the bottom edge (negative top), so the buttons stay in view.
+    function measure() {
+      var r = hero.getBoundingClientRect(), s = line2.getBoundingClientRect();
+      cy = s.top - r.top + s.height / 2;
+      hero.style.setProperty('--cy', cy + 'px');
+      stickTop = Math.min(0, window.innerHeight - hero.offsetHeight);
+      hero.style.top = stickTop + 'px';
     }
-    // Entering band mode measures the lines; leaving it hands --lens back to the stylesheet token.
+    function scrollProgress() {
+      var travel = track.offsetHeight - hero.offsetHeight;
+      return travel > 0 ? clamp((stickTop - track.getBoundingClientRect().top) / travel) : 1;
+    }
+    function onScroll() {
+      if (!phone.matches) return;
+      var p = scrollProgress(), e = p * p * (3 - 2 * p), r = hero.getBoundingClientRect();
+      var maxR = Math.hypot(r.width / 2 + 10, Math.max(cy, r.height - cy) + 10);
+      hero.style.setProperty('--r', (44 + (maxR - 44) * e) + 'px');
+      hero.style.setProperty('--ring-o', String(1 - clamp((p - .6) / .25)));
+      hero.classList.toggle('idle', p < .01);
+      hero.classList.toggle('scrolled', p > .17);
+      hero.classList.toggle('revealed', p > .7);
+      var k = clamp((p - .45) / .4);
+      figures.forEach(function (f) { f.el.textContent = k >= 1 ? f.text : money(Math.round(f.to * k)); });
+      if (p > .05) markUsed();
+      if (p >= 1 && !revealSent) { revealSent = true; hero.dispatchEvent(new CustomEvent('lens:reveal', { bubbles: true })); }
+    }
+    function scrollToReveal() {
+      var end = window.scrollY + track.getBoundingClientRect().bottom - hero.offsetHeight - stickTop;
+      window.scrollTo({ top: end, behavior: reduce ? 'auto' : 'smooth' });
+    }
+    // Entering phone mode measures and draws the lens; leaving it hands everything back to the stylesheet.
     function applyMode() {
-      if (phone.matches) bandTo(line);
-      else hero.style.removeProperty('--lens');
+      if (phone.matches) {
+        if (isOpen()) setOpen(false);
+        revealBtn.textContent = scrollLabel;
+        revealBtn.removeAttribute('aria-pressed');
+        measure(); onScroll();
+      } else {
+        ['--r', '--cy', '--ring-o', 'top'].forEach(function (p) { hero.style.removeProperty(p); });
+        hero.classList.remove('idle', 'scrolled', 'revealed');
+        figures.forEach(function (f) { f.el.textContent = f.text; });
+        revealBtn.textContent = isOpen() ? closeLabel : openLabel;
+        revealBtn.setAttribute('aria-pressed', String(isOpen()));
+      }
     }
 
     hero.addEventListener('pointermove', function (e) {
@@ -81,11 +116,7 @@
       if (phone.matches || isOpen() || onControl(e)) return;
       markUsed(); fromEvent(e);
     });
-    // Band mode: a tap (click, so a scroll that started on the hero does not count) opens or closes the documents.
-    hero.addEventListener('click', function (e) {
-      if (!phone.matches || onControl(e)) return;
-      setOpen(!isOpen());
-    });
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', applyMode);
     if (phone.addEventListener) phone.addEventListener('change', applyMode); else phone.addListener(applyMode);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(applyMode);
@@ -102,10 +133,10 @@
       revealBtn.setAttribute('aria-pressed', String(open));
       if (open) hero.dispatchEvent(new CustomEvent('lens:reveal', { bubbles: true }));
     }
-    revealBtn.addEventListener('click', function () { setOpen(!isOpen()); });
+    revealBtn.addEventListener('click', function () {
+      if (phone.matches) scrollToReveal(); else setOpen(!isOpen());
+    });
 
-    // Desktop drift runs per frame; the band steps on a plain timer, which keeps going where a phone
-    // browser slows or pauses animation frames.
     function drift() {
       if (!phone.matches && !followed && !isOpen()) {
         var r = hero.getBoundingClientRect();
@@ -114,15 +145,11 @@
       }
       window.requestAnimationFrame(drift);
     }
-    function stepBand() {
-      if (phone.matches && !isOpen()) bandTo(line + 1);
-    }
     applyMode();
     // Without motion: on desktop the documents are simply shown, open, with the button to go back to the lens.
-    // Phones always start on the lens; with reduced motion the band jumps from line to line without sliding.
+    // Phones always start on the lens; scrolling is the visitor's own motion.
     if (reduce && !phone.matches) setOpen(true);
     if (!reduce) drift();
-    setInterval(stepBand, STEP_MS);
   }
 
   // Documentări filters: show the items of one type; without JS every item stays visible.

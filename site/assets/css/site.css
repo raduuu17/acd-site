@@ -129,7 +129,6 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 .linklike { background: none; border: 0; padding: 0; color: var(--foot-strong); font: inherit; text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 960px) {
-  :root { --lens: 24px; }   /* on phones --lens is half the band height until the script measures a line */
   .menu-toggle { display: inline-flex; }
   html.js .nav { display: none; }
   /* The menu opens as a small card under the button (4 links), not a full-screen panel. */
@@ -243,12 +242,16 @@ html:not(.js) .hero { cursor: auto; }
   .files, .people { padding: 70px 0; }
   .intro { padding: 60px 0 50px; }
 }
-/* ===== Mobile lens: the magnifier becomes a band, one headline line tall (phones and tablets, ≤ 960px).
-   Desktop rules above are untouched; everything here lives inside the mobile media queries. ===== */
+/* ===== Mobile lens (phones and tablets, ≤ 960px; variant C chosen on 2026-10-18): scrolling grows the lens.
+   The hero sticks to the top of a taller track; the script turns scroll progress into the lens radius --r,
+   centred on the second headline line (--cy), and counts the figures up. Desktop rules above are untouched. ===== */
 @media (max-width: 960px) {
-  /* The hero is a two-row grid. The proof layer is in flow and spans both rows; the foot sits in row 2.
-     Height = max(viewport share, content), so the facts can never run under the buttons. */
-  .hero { display: grid; grid-template-rows: 1fr auto; height: auto; min-height: min(calc(100svh - 160px), 700px); }
+  html.js .hero-scroll { height: calc(100svh + 900px); background: var(--h-bg); }
+  html.js .hero { position: sticky; top: 0; }
+
+  /* The hero is a two-row grid. The proof layer is in flow and spans both rows; the foot sits in row 2,
+     so the facts can never run under the buttons. */
+  .hero { display: grid; grid-template-rows: 1fr auto; height: auto; min-height: 100svh; }
   .layer { padding-top: 112px; }
   .proof { position: relative; inset: auto; display: block; grid-area: 1 / 1 / 3 / 2; padding-bottom: 96px; }
   .hero-foot { position: relative; inset: auto; grid-area: 2 / 1 / 3 / 2; padding-bottom: 20px; }
@@ -258,43 +261,41 @@ html:not(.js) .hero { cursor: auto; }
   .kicker { margin-bottom: 14px; }
   .below { margin-top: 22px; min-height: 0; }
 
-  /* Facts: compact, stacked, one under the other; visible when the hero is open. */
+  /* Facts: compact, stacked, one under the other. */
   .facts { gap: 10px; }
   .fact { flex-direction: column; gap: 4px; padding-top: 8px; }
-  .fact b { font-size: 22px; }
+  .fact b { font-size: 22px; font-variant-numeric: tabular-nums; }
   .fact span { font-size: 14px; line-height: 1.4; }
   /* Two more blurred lines so the declared layer has the same visual weight as the facts. */
   .said .fog::before, .said .fog::after { content: ""; display: block; height: 13px; border-radius: 3px; background: var(--h-fog); }
   .said .fog::before { order: 5; width: 72%; }
   .said .fog::after { order: 6; width: 40%; }
 
-  /* The lens: a band across the full width, centred on --y, 2 × --lens tall. It slides from line to line. */
-  .proof { clip-path: inset(calc(var(--y, 50%) - var(--lens)) 8px calc(100% - var(--y, 50%) - var(--lens)) 8px round 14px); transition: clip-path .55s cubic-bezier(.6, 0, .2, 1); }
-  .hero.open .proof { clip-path: inset(0px 0px 0px 0px round 0px); transition-duration: .8s; }
-  .hero.closing .proof { transition-duration: .6s; }
-  .lens-ring { left: 8px; right: 8px; width: auto; height: calc(var(--lens) * 2); transform: translateY(-50%); border-radius: 14px; border-width: 3px; box-shadow: 0 0 0 4px rgba(124, 192, 255, .22), 0 18px 40px -12px rgba(10, 20, 45, .45); transition: top .55s cubic-bezier(.6, 0, .2, 1), opacity .3s; }
-  /* On phones ::after is not the desktop handle but a light that sweeps across the band when it lands on a line. */
-  .lens-ring::after { content: ""; position: absolute; inset: 0; width: auto; height: auto; transform: none; border-radius: inherit; background: linear-gradient(100deg, transparent 35%, rgba(124, 192, 255, .45) 50%, transparent 65%) no-repeat; background-size: 250% 100%; background-position: 150% 0; opacity: 0; }
-  .lens-ring.sweep::after { animation: band-sweep .9s ease-out .35s; }
-  /* The band carries the proof kicker as a tag (the real kicker stays in the proof layer for assistive tech). */
-  .lens-ring::before { content: attr(data-label); position: absolute; right: 10px; top: -13px; padding: 2px 9px; border-radius: 999px; background: var(--ring); color: var(--h-proof-text); font: 700 13px/1.5 var(--font); white-space: nowrap; }
+  /* The lens: a circle on the second line that grows with scrolling; it breathes while nobody has scrolled. */
+  .proof { clip-path: circle(var(--r, 44px) at 50% var(--cy, 40%)); }
+  .lens-ring { left: 50%; top: var(--cy, 40%); width: calc(var(--r, 44px) * 2); height: calc(var(--r, 44px) * 2); border-width: 3px; box-shadow: 0 0 0 5px rgba(124, 192, 255, .22); opacity: var(--ring-o, 1); transition: none; }
+  .lens-ring::after { display: none; }
+  .hero.idle .lens-ring { animation: lens-breathe 1.8s ease-in-out infinite; }
 
-  /* Foot: a small pill (a tap on the hero does the same) + one text link, on one row ("Despre noi" stays in the menu and footer). */
+  /* Foot: a small "scroll" pill + one text link ("Despre noi" stays in the menu and footer). */
   .hero-foot .wrap { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 22px; }
-  .reveal { width: auto; min-height: 44px; padding: 10px 20px; border-radius: 999px; font-size: 15px; }
+  .reveal { width: auto; min-height: 44px; padding: 10px 20px; border-radius: 999px; font-size: 15px; transition: opacity .25s, visibility .25s; }
+  .reveal::after { content: "↓"; display: inline-block; margin-left: 7px; animation: hint-nudge 1.4s ease-in-out infinite; }
+  .hero.scrolled .reveal { opacity: 0; visibility: hidden; }
   .hero-foot .btns { flex-direction: row; justify-content: center; gap: 0 24px; }
   .hero-foot .btn { background: none; border: 0; padding: 10px 4px; min-height: 44px; color: var(--nav-hover); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
   .hero-foot .btn.primary:hover { filter: none; text-decoration-thickness: 3px; }
   .hero-foot .btn.secondary { display: none; }
-  .hero.open .hero-foot .btn { color: var(--accent); }
+  .hero.revealed .hero-foot .btn { color: var(--accent); }
+  .hero.revealed .hero-foot { --focus-ring: var(--accent); }
 }
 @media (max-width: 960px) and (prefers-reduced-motion: reduce) {
-  .proof, .lens-ring { transition: none; }
-  .lens-ring.sweep::after { animation: none; }
+  .hero.idle .lens-ring, .reveal::after { animation: none; }
   html.js .nav.open { animation: none; }
 }
+@keyframes lens-breathe { 50% { transform: translate(-50%, -50%) scale(1.09); } }
+@keyframes hint-nudge { 50% { transform: translateY(3px); } }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
-@keyframes band-sweep { 0% { opacity: 1; background-position: 150% 0; } 100% { opacity: 1; background-position: -50% 0; } }
 @media (prefers-reduced-motion: reduce) {
   .hero.open .proof, .hero.closing .proof { transition: none; }
 }

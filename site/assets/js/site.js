@@ -2,81 +2,70 @@
 (function () {
   'use strict';
 
-  // Mobile menu: full-screen panel, closes on Esc, "Închide" or a link; focus stays inside while open.
+  // Mobile menu: a small dropdown under the button. The button opens and closes it ("Meniu" / "Închide");
+  // Esc, a tap outside or choosing a link closes it too.
   function initMenu() {
     var toggle = document.querySelector('.menu-toggle');
     var menu = document.getElementById('menu');
     if (!toggle || !menu) return;
-    var closeBtn = menu.querySelector('.menu-close');
+    var label = toggle.querySelector('.menu-label');
+    var openLabel = label.textContent, closeLabel = toggle.getAttribute('data-close-label');
 
-    function focusables() {
-      return Array.prototype.slice.call(menu.querySelectorAll('a, button'));
+    function isOpen() { return menu.classList.contains('open'); }
+    function setOpen(open, focusToggle) {
+      menu.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+      label.textContent = open ? closeLabel : openLabel;
+      if (open) menu.querySelector('a').focus();
+      else if (focusToggle) toggle.focus();
     }
-    function open() {
-      menu.classList.add('open');
-      toggle.setAttribute('aria-expanded', 'true');
-      document.body.style.overflow = 'hidden';
-      focusables()[0].focus();
-    }
-    function close() {
-      menu.classList.remove('open');
-      toggle.setAttribute('aria-expanded', 'false');
-      document.body.style.overflow = '';
-      toggle.focus();
-    }
-    toggle.addEventListener('click', open);
-    if (closeBtn) closeBtn.addEventListener('click', close);
+    toggle.addEventListener('click', function () { setOpen(!isOpen(), false); });
     menu.addEventListener('click', function (e) {
-      if (e.target.closest('a') && menu.classList.contains('open')) close();
+      if (e.target.closest('a') && isOpen()) setOpen(false, false);
+    });
+    document.addEventListener('click', function (e) {
+      if (isOpen() && !menu.contains(e.target) && !toggle.contains(e.target)) setOpen(false, false);
     });
     document.addEventListener('keydown', function (e) {
-      if (!menu.classList.contains('open')) return;
-      if (e.key === 'Escape') { close(); return; }
-      if (e.key !== 'Tab') return;
-      var items = focusables(), first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (isOpen() && e.key === 'Escape') setOpen(false, true);
     });
   }
 
   // Magnifier hero. Desktop: a round lens follows the mouse (or a dragging finger) and, until someone
   // touches it, drifts slowly over the headline so the effect is discoverable.
   // Phones and tablets (≤ 960px, same breakpoint as site.css): the lens is a band one headline line tall.
-  // It moves from line to line by itself, one pair "declared → documented" at a time; a tap on a line
-  // parks it there. Vertical finger drags stay a page scroll (touch-action: pan-y), the band never fights them.
+  // It moves from line to line by itself, one pair "declared → documented" at a time. A tap anywhere on
+  // the hero shows all the documents, another tap goes back to the lens (the small button does the same
+  // for keyboards and screen readers). Vertical finger drags stay a page scroll (touch-action: pan-y).
   function initLens(hero) {
     var proof = hero.querySelector('.proof');
+    var ring = hero.querySelector('.lens-ring');
     var revealBtn = hero.querySelector('.reveal');
     var saidLines = hero.querySelectorAll('.said .lines span');
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var phone = window.matchMedia('(max-width: 960px)');
     var openLabel = revealBtn.textContent, closeLabel = revealBtn.getAttribute('data-close-label');
-    var followed = false, used = false, t = 0, closingTimer, line = 0, lastStep = 0;
-    var STEP_MS = 2400;
+    var followed = false, t = 0, closingTimer, line = 0;
+    var STEP_MS = 2000;
 
     function isOpen() { return hero.classList.contains('open'); }
     function setLens(x, y) { hero.style.setProperty('--x', x + 'px'); hero.style.setProperty('--y', y + 'px'); }
     function fromEvent(e) { var r = hero.getBoundingClientRect(); setLens(e.clientX - r.left, e.clientY - r.top); }
     function onControl(e) { return e.target.closest('a, button'); }
     function markUsed() {
+      if (!followed) hero.dispatchEvent(new CustomEvent('lens:use', { bubbles: true }));
       followed = true;
-      if (!used) { used = true; hero.dispatchEvent(new CustomEvent('lens:use', { bubbles: true })); }
     }
 
     // Band mode: centre the band on headline line i and make it that line tall (+ 6px above and below).
+    // A light sweeps across the band each time it lands on a new line.
     function bandTo(i) {
-      line = (i + saidLines.length) % saidLines.length;
+      var next = (i + saidLines.length) % saidLines.length;
+      if (next !== line) { ring.classList.remove('sweep'); void ring.offsetWidth; ring.classList.add('sweep'); }
+      line = next;
       var r = hero.getBoundingClientRect(), s = saidLines[line].getBoundingClientRect();
       hero.style.setProperty('--lens', Math.round(s.height / 2 + 6) + 'px');
       setLens(r.width / 2, s.top - r.top + s.height / 2);
-    }
-    function lineAt(clientY) {
-      var best = 0, dist = Infinity;
-      for (var i = 0; i < saidLines.length; i++) {
-        var s = saidLines[i].getBoundingClientRect(), d = Math.abs(clientY - (s.top + s.height / 2));
-        if (d < dist) { dist = d; best = i; }
-      }
-      return best;
     }
     // Entering band mode measures the lines; leaving it hands --lens back to the stylesheet token.
     function applyMode() {
@@ -92,10 +81,10 @@
       if (phone.matches || isOpen() || onControl(e)) return;
       markUsed(); fromEvent(e);
     });
-    // Band mode: a tap (click, so a scroll that started on the hero does not count) parks the band on that line.
+    // Band mode: a tap (click, so a scroll that started on the hero does not count) opens or closes the documents.
     hero.addEventListener('click', function (e) {
-      if (!phone.matches || isOpen() || onControl(e)) return;
-      markUsed(); bandTo(lineAt(e.clientY));
+      if (!phone.matches || onControl(e)) return;
+      setOpen(!isOpen());
     });
     window.addEventListener('resize', applyMode);
     if (phone.addEventListener) phone.addEventListener('change', applyMode); else phone.addListener(applyMode);
@@ -105,32 +94,35 @@
     // every later lens move and the lens would lag behind the pointer.
     function endClosing() { hero.classList.remove('closing'); clearTimeout(closingTimer); }
     proof.addEventListener('transitionend', function (e) { if (e.propertyName === 'clip-path') endClosing(); });
-    revealBtn.addEventListener('click', function () {
-      var open = !isOpen();
+    function setOpen(open) {
       hero.classList.toggle('open', open);
       if (open) endClosing();
       else { hero.classList.add('closing'); clearTimeout(closingTimer); closingTimer = setTimeout(endClosing, 700); }
       revealBtn.textContent = open ? closeLabel : openLabel;
       revealBtn.setAttribute('aria-pressed', String(open));
       if (open) hero.dispatchEvent(new CustomEvent('lens:reveal', { bubbles: true }));
-    });
+    }
+    revealBtn.addEventListener('click', function () { setOpen(!isOpen()); });
 
-    function drift(now) {
-      if (!followed && !isOpen()) {
-        if (phone.matches) {
-          if (now - lastStep > STEP_MS) { lastStep = now; bandTo(line + 1); }
-        } else {
-          var r = hero.getBoundingClientRect();
-          t += 0.0025;
-          setLens(r.width * (0.3 + 0.16 * Math.cos(t * 2)), r.height * (0.47 + 0.1 * Math.sin(t * 3)));
-        }
+    // Desktop drift runs per frame; the band steps on a plain timer, which keeps going where a phone
+    // browser slows or pauses animation frames.
+    function drift() {
+      if (!phone.matches && !followed && !isOpen()) {
+        var r = hero.getBoundingClientRect();
+        t += 0.0025;
+        setLens(r.width * (0.3 + 0.16 * Math.cos(t * 2)), r.height * (0.47 + 0.1 * Math.sin(t * 3)));
       }
       window.requestAnimationFrame(drift);
     }
+    function stepBand() {
+      if (phone.matches && !isOpen()) bandTo(line + 1);
+    }
     applyMode();
-    // Without motion the documents are simply shown, open, with the button to go back to the lens.
-    if (reduce) { hero.classList.add('open'); revealBtn.textContent = closeLabel; revealBtn.setAttribute('aria-pressed', 'true'); }
-    else { lastStep = performance.now(); drift(lastStep); }
+    // Without motion: on desktop the documents are simply shown, open, with the button to go back to the lens.
+    // Phones always start on the lens; with reduced motion the band jumps from line to line without sliding.
+    if (reduce && !phone.matches) setOpen(true);
+    if (!reduce) drift();
+    setInterval(stepBand, STEP_MS);
   }
 
   // Documentări filters: show the items of one type; without JS every item stays visible.

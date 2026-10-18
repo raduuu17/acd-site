@@ -46,7 +46,7 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 
 /* header: sits over the dark top of every page (hero or page-head) */
 .top { position: absolute; inset: 0 0 auto 0; z-index: 30; background: var(--h-bg); }
-.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 96px; gap: 20px; }
+.top .wrap { position: relative; display: flex; align-items: center; justify-content: space-between; height: 96px; gap: 20px; }
 .logo { background: var(--surface); border-radius: 10px; padding: 7px 12px; display: inline-flex; box-shadow: 0 4px 18px -10px rgba(19, 37, 75, .45); }
 .logo img { height: 50px; width: auto; display: block; }
 .nav { display: flex; gap: 30px; align-items: center; }
@@ -54,7 +54,16 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 .nav a:hover, .nav a[aria-current="page"] { color: var(--nav-hover); }
 .nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
 .nav a.cta { color: var(--accent-ink); background: var(--accent); padding: 10px 18px; border-radius: 8px; text-decoration: none; }
-.menu-toggle, .menu-close { display: none; background: transparent; border: 1px solid var(--burger-line); color: var(--burger-text); border-radius: 8px; padding: 9px 14px; font: 600 15px var(--font); cursor: pointer; }
+/* Burger icon that turns into an X while the menu is open. */
+.burger, .burger::before, .burger::after { display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .2s, background-color .2s; }
+.burger { position: relative; }
+.burger::before, .burger::after { content: ""; position: absolute; left: 0; }
+.burger::before { top: -6px; }
+.burger::after { top: 6px; }
+.menu-toggle[aria-expanded="true"] .burger { background-color: transparent; }
+.menu-toggle[aria-expanded="true"] .burger::before { transform: translateY(6px) rotate(45deg); }
+.menu-toggle[aria-expanded="true"] .burger::after { transform: translateY(-6px) rotate(-45deg); }
+.menu-toggle { display: none; align-items: center; gap: 10px; background: transparent; border: 1px solid var(--burger-line); color: var(--burger-text); border-radius: 8px; padding: 9px 14px; font: 600 15px var(--font); cursor: pointer; }
 
 /* buttons */
 .btns { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -121,11 +130,13 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 
 @media (max-width: 960px) {
   :root { --lens: 24px; }   /* on phones --lens is half the band height until the script measures a line */
-  .menu-toggle { display: block; }
+  .menu-toggle { display: inline-flex; }
   html.js .nav { display: none; }
-  html.js .nav.open { display: flex; position: fixed; inset: 0; z-index: 60; flex-direction: column; align-items: flex-start; gap: 22px; padding: 96px 28px 28px; background: var(--h-bg); }
-  html.js .nav.open a { font-size: 26px; font-weight: 750; }
-  html.js .nav.open .menu-close { display: block; position: absolute; top: 24px; right: 24px; }
+  /* The menu opens as a small card under the button (4 links), not a full-screen panel. */
+  html.js .nav.open { display: flex; position: absolute; top: 82px; right: 32px; z-index: 60; flex-direction: column; align-items: stretch; gap: 2px; width: min(280px, calc(100vw - 36px)); padding: 8px; background: var(--foot-bg); border: 1px solid var(--burger-line); border-radius: 14px; box-shadow: 0 24px 60px -18px rgba(10, 20, 45, .6); transform-origin: top right; animation: menu-in .18s ease-out; }
+  html.js .nav.open a { padding: 12px 14px; border-radius: 10px; font-size: 17px; }
+  html.js .nav.open a:not(.cta):hover, html.js .nav.open a[aria-current="page"] { background: var(--h-bg); color: var(--nav-hover); text-decoration: none; }
+  html.js .nav.open a.cta { margin-top: 6px; text-align: center; }
   html:not(.js) .top { position: static; background: var(--h-bg); }
   html:not(.js) .top .wrap { flex-wrap: wrap; height: auto; padding-top: 16px; padding-bottom: 16px; }
   html:not(.js) .nav { flex-wrap: wrap; gap: 14px 22px; }
@@ -138,6 +149,7 @@ h2 { font-size: clamp(34px, 5vw, 72px); line-height: 1; font-weight: 800; font-s
 }
 @media (max-width: 520px) {
   .wrap { padding: 0 18px; }
+  html.js .nav.open { right: 18px; }
   .btns { flex-direction: column; }
   .btn { text-align: center; }
   .reading .text { font-size: 18px; }
@@ -238,7 +250,7 @@ html:not(.js) .hero { cursor: auto; }
      Height = max(viewport share, content), so the facts can never run under the buttons. */
   .hero { display: grid; grid-template-rows: 1fr auto; height: auto; min-height: min(calc(100svh - 160px), 700px); }
   .layer { padding-top: 112px; }
-  .proof { position: relative; inset: auto; display: block; grid-area: 1 / 1 / 3 / 2; padding-bottom: 150px; }
+  .proof { position: relative; inset: auto; display: block; grid-area: 1 / 1 / 3 / 2; padding-bottom: 96px; }
   .hero-foot { position: relative; inset: auto; grid-area: 2 / 1 / 3 / 2; padding-bottom: 20px; }
 
   /* Headline: 10vw keeps "Comunicate." (the widest line) at least 40px inside the 360–430px screens. */
@@ -261,13 +273,15 @@ html:not(.js) .hero { cursor: auto; }
   .hero.open .proof { clip-path: inset(0px 0px 0px 0px round 0px); transition-duration: .8s; }
   .hero.closing .proof { transition-duration: .6s; }
   .lens-ring { left: 8px; right: 8px; width: auto; height: calc(var(--lens) * 2); transform: translateY(-50%); border-radius: 14px; border-width: 3px; box-shadow: 0 0 0 4px rgba(124, 192, 255, .22), 0 18px 40px -12px rgba(10, 20, 45, .45); transition: top .55s cubic-bezier(.6, 0, .2, 1), opacity .3s; }
-  .lens-ring::after { display: none; }
+  /* On phones ::after is not the desktop handle but a light that sweeps across the band when it lands on a line. */
+  .lens-ring::after { content: ""; position: absolute; inset: 0; width: auto; height: auto; transform: none; border-radius: inherit; background: linear-gradient(100deg, transparent 35%, rgba(124, 192, 255, .45) 50%, transparent 65%) no-repeat; background-size: 250% 100%; background-position: 150% 0; opacity: 0; }
+  .lens-ring.sweep::after { animation: band-sweep .9s ease-out .35s; }
   /* The band carries the proof kicker as a tag (the real kicker stays in the proof layer for assistive tech). */
   .lens-ring::before { content: attr(data-label); position: absolute; right: 10px; top: -13px; padding: 2px 9px; border-radius: 999px; background: var(--ring); color: var(--h-proof-text); font: 700 13px/1.5 var(--font); white-space: nowrap; }
 
-  /* Foot: one primary button + one text link instead of three stacked buttons ("Despre noi" stays in the menu and footer). */
-  .hero-foot .wrap { gap: 6px; }
-  .reveal { min-height: 50px; }
+  /* Foot: a small pill (a tap on the hero does the same) + one text link, on one row ("Despre noi" stays in the menu and footer). */
+  .hero-foot .wrap { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 22px; }
+  .reveal { width: auto; min-height: 44px; padding: 10px 20px; border-radius: 999px; font-size: 15px; }
   .hero-foot .btns { flex-direction: row; justify-content: center; gap: 0 24px; }
   .hero-foot .btn { background: none; border: 0; padding: 10px 4px; min-height: 44px; color: var(--nav-hover); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
   .hero-foot .btn.primary:hover { filter: none; text-decoration-thickness: 3px; }
@@ -276,7 +290,11 @@ html:not(.js) .hero { cursor: auto; }
 }
 @media (max-width: 960px) and (prefers-reduced-motion: reduce) {
   .proof, .lens-ring { transition: none; }
+  .lens-ring.sweep::after { animation: none; }
+  html.js .nav.open { animation: none; }
 }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+@keyframes band-sweep { 0% { opacity: 1; background-position: 150% 0; } 100% { opacity: 1; background-position: -50% 0; } }
 @media (prefers-reduced-motion: reduce) {
   .hero.open .proof, .hero.closing .proof { transition: none; }
 }

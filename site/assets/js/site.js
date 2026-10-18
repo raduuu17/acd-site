@@ -88,7 +88,8 @@
       }
       window.requestAnimationFrame(drift);
     }
-    if (reduce) { var r = hero.getBoundingClientRect(); setLens(r.width * 0.3, r.height * 0.47); }
+    // Without motion the documents are simply shown, open, with the button to go back to the lens.
+    if (reduce) { hero.classList.add('open'); revealBtn.textContent = closeLabel; revealBtn.setAttribute('aria-pressed', 'true'); }
     else drift();
   }
 
@@ -108,15 +109,42 @@
 
   // Article sharing: "Copiază linkul" copies the page URL; share links announce themselves for analytics.
   function initShare() {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-copy-link]'), function (btn) {
+    // Old-style copy for browsers that block the Clipboard API (permission denied, plain http).
+    function copyFallback(text) {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(area);
+      return ok;
+    }
+    // [data-copy-link] copies the page address; [data-copy-text] copies its own value (e.g. the e-mail address).
+    Array.prototype.forEach.call(document.querySelectorAll('[data-copy-link], [data-copy-text]'), function (btn) {
       var label = btn.textContent;
+      var status = btn.parentNode.querySelector('.share-status');
+      function report(ok) {
+        var message = btn.getAttribute(ok ? 'data-done-label' : 'data-fail-label');
+        if (status) status.textContent = message;
+        if (ok) btn.textContent = message;
+        setTimeout(function () { btn.textContent = label; if (status) status.textContent = ''; }, ok ? 2000 : 6000);
+      }
       btn.addEventListener('click', function () {
-        var done = function () {
-          btn.textContent = btn.getAttribute('data-done-label');
-          setTimeout(function () { btn.textContent = label; }, 2000);
-        };
-        if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done, function () {});
-        btn.dispatchEvent(new CustomEvent('acd:share', { bubbles: true, detail: { method: 'copy' } }));
+        var text = btn.hasAttribute('data-copy-text') ? btn.getAttribute('data-copy-text') : location.href;
+        if (navigator.clipboard && window.isSecureContext) {
+          // Some browsers leave the promise pending (permission prompt never shown): fall back after 1.5 s.
+          var settled = false;
+          var settle = function (ok) { if (!settled) { settled = true; report(ok); } };
+          setTimeout(function () { if (!settled) settle(copyFallback(text)); }, 1500);
+          navigator.clipboard.writeText(text).then(function () { settle(true); }, function () { settle(copyFallback(text)); });
+        } else {
+          report(copyFallback(text));
+        }
+        if (btn.hasAttribute('data-copy-text')) acdTrack('contact_click', { method: 'copy_address' });
+        else btn.dispatchEvent(new CustomEvent('acd:share', { bubbles: true, detail: { method: 'copy' } }));
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-share]'), function (a) {
@@ -143,7 +171,7 @@
         if (hit) shown++;
       });
       groups.forEach(function (g) { g.hidden = !g.querySelector('.lib-item:not([hidden])'); });
-      status.textContent = !q ? '' : shown ? shown + (shown === 1 ? ' document găsit' : ' documente găsite') : input.getAttribute('data-empty');
+      status.textContent = !q ? '' : shown ? shown + (shown === 1 ? ' document găsit' : (shown % 100 >= 20 || shown % 100 === 0 ? ' de documente găsite' : ' documente găsite')) : input.getAttribute('data-empty');
       clearTimeout(timer);
       if (q) timer = setTimeout(function () {
         input.dispatchEvent(new CustomEvent('acd:search', { bubbles: true, detail: { term: input.value.trim() } }));
@@ -166,7 +194,10 @@
   function loadAnalytics() {
     if (gaLoaded) return;
     gaLoaded = true;
+    window['ga-disable-G-T8T97JEXXG'] = false;
     window.gtag('consent', 'update', { 'analytics_storage': 'granted' });
+    window.gtag('js', new Date());
+    window.gtag('config', 'G-T8T97JEXXG');
     var s = document.createElement('script');
     s.async = true;
     s.src = GA_SRC;
@@ -201,6 +232,7 @@
       if (value === 'granted') loadAnalytics();
       else {
         window.gtag('consent', 'update', { 'analytics_storage': 'denied' });
+        window['ga-disable-G-T8T97JEXXG'] = true;  // stops a gtag.js already loaded on this page
         clearAnalyticsCookies();
       }
     });
@@ -217,6 +249,7 @@
       if (!a) return;
       var href = a.getAttribute('href');
       if (/^(mailto|tel):/i.test(href)) { acdTrack('contact_click', { method: href.split(':')[0] }); return; }
+      if (a.hasAttribute('data-contact')) { acdTrack('contact_click', { method: a.getAttribute('data-contact') }); return; }
       var url = new URL(a.href, location.href);
       var internal = url.hostname.replace(/^www\./, '') === ownHost;
       if (internal && /\.(pdf|jpe?g|png)$/i.test(url.pathname)) {
